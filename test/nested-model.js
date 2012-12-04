@@ -1031,4 +1031,50 @@ $(document).ready(function() {
     equal(model, doc);
   });
 
+  test("#remove() event parameters should match change values", function () {
+    var change = sinon.spy();
+    var changeAddresses = sinon.spy();
+    var removeAddresses = sinon.spy();
+
+    doc.bind('change', change);
+    doc.bind('change:addresses', changeAddresses);
+    doc.bind('remove:addresses', removeAddresses);
+
+    doc.remove('addresses[1]');
+
+    sinon.assert.calledOnce(change);
+    sinon.assert.calledOnce(changeAddresses);
+    sinon.assert.calledOnce(removeAddresses);
+
+    deepEqual(change.firstCall.args[1], {
+      gender: 'M',
+      name: {
+        first: 'Aidan',
+        middle: {
+          initial: 'L',
+          full: 'Lee'
+        },
+        last: 'Feldman'
+      },
+      addresses: [
+        {
+          city: 'Brooklyn',
+          state: 'NY'
+        }
+      ]
+    });
+
+    deepEqual(changeAddresses.firstCall.args[1], [
+        {
+          city: 'Brooklyn',
+          state: 'NY'
+        }
+      ]);
+
+    deepEqual(removeAddresses.firstCall.args[1], {
+      city: 'Oak Park',
+      state: 'IL'
+    });
+  });
+
 });
