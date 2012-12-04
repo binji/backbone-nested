@@ -10,7 +10,26 @@
 (function(){
   'use strict';
 
-  var _delayedTriggers = [];
+
+  var DelayedTriggers = function () {
+    this.triggers = [];
+  };
+
+  DelayedTriggers.prototype.delayedTrigger = function(/*arguments*/) {
+    this.triggers.push(arguments);
+  };
+
+  DelayedTriggers.prototype.delayedChange = function(model, attrStr, newVal) {
+    this.delayedTrigger('change:' + attrStr, model, newVal);
+    model.changed[attrStr] = newVal;
+  };
+
+  DelayedTriggers.prototype.run = function(model) {
+    while (this.triggers.length > 0) {
+      model.trigger.apply(model, this.triggers.shift());
+    }
+  };
+
 
   Backbone.NestedModel = Backbone.Model.extend({
 
@@ -37,7 +56,8 @@
 
     set: function(key, value, opts){
       var newAttrs = Backbone.NestedModel.deepClone(this.attributes),
-        attrPath;
+        attrPath,
+        delayedTriggers = new DelayedTriggers();
 
       if (_.isString(key)){
         // Backbone 0.9.0+ syntax: `model.set(key, val)` - convert the key to an attribute path
@@ -49,7 +69,7 @@
 
       if (attrPath){
         opts = opts || {};
-        this._setAttr(newAttrs, attrPath, value, opts);
+        this._setAttr(newAttrs, attrPath, value, opts, delayedTriggers);
       } else { // it's an Object
         opts = value || {};
         var attrs = key;
@@ -58,7 +78,8 @@
             this._setAttr(newAttrs,
                           Backbone.NestedModel.attrPath(_attrStr),
                           opts.unset ? null : attrs[_attrStr],
-                          opts);
+                          opts,
+                          delayedTriggers);
           }
         }
       }
@@ -84,7 +105,7 @@
         Backbone.NestedModel.__super__.set.call(this, newAttrs, opts);
       }
 
-      this._runDelayedTriggers();
+      delayedTriggers.run(this);
       return this;
     },
 
@@ -97,6 +118,7 @@
 
       var changed = this.changed = {};
       var model = this;
+      var delayedTriggers = new DelayedTriggers();
 
       var setChanged = function(obj, prefix) {
         // obj will be an Array or an Object
@@ -115,7 +137,8 @@
           if (_.isObject(val)) { // clear child attrs
             setChanged(val, changedPath);
           }
-          if (!options.silent) model._delayedChange(changedPath, null);
+          if (!options.silent)
+            delayedTriggers.delayedChange(model, changedPath, null);
           changed[changedPath] = null;
         });
       };
@@ -125,9 +148,9 @@
       this._escapedAttributes = {};
 
       // Fire the `"change"` events.
-      if (!options.silent) this._delayedTrigger('change');
+      if (!options.silent) delayedTriggers.delayedTrigger('change');
 
-      this._runDelayedTriggers();
+      delayedTriggers.run(this);
       return this;
     },
 
@@ -176,24 +199,8 @@
     },
 
 
-    // private
-    _delayedTrigger: function(/* the trigger args */){
-      _delayedTriggers.push(arguments);
-    },
-
-    _delayedChange: function(attrStr, newVal){
-      this._delayedTrigger('change:' + attrStr, this, newVal);
-      this.changed[attrStr] = newVal;
-    },
-
-    _runDelayedTriggers: function(){
-      while (_delayedTriggers.length > 0){
-        this.trigger.apply(this, _delayedTriggers.shift());
-      }
-    },
-
     // note: modifies `newAttrs`
-    _setAttr: function(newAttrs, attrPath, newValue, opts){
+    _setAttr: function(newAttrs, attrPath, newValue, opts, delayedTriggers){
       opts = opts || {};
 
       var fullPathLength = attrPath.length;
@@ -227,7 +234,7 @@
                   nestedAttr = prefix + '.' + a;
                   nestedVal = obj[a];
                   if (!_.isEqual(model.get(nestedAttr), nestedVal)) {
-                    model._delayedChange(nestedAttr, nestedVal);
+                    delayedTriggers.delayedChange(model, nestedAttr, nestedVal);
                   }
                   if (_.isObject(nestedVal)) {
                     checkChanges(nestedVal, nestedAttr);
@@ -242,7 +249,7 @@
           // Trigger Remove Event if array being set to null
           if (newValue === null){
             var parentPath = Backbone.NestedModel.createAttrStr(_.initial(attrPath));
-            model._delayedTrigger('remove:' + parentPath, model, val[attr]);
+            delayedTriggers.delayedTrigger('remove:' + parentPath, model, val[attr]);
           }
 
         } else if (!val[attr]){
@@ -256,11 +263,11 @@
         if (!opts.silent){
           // let the superclass handle change events for top-level attributes
           if (path.length > 1 && isNewValue){
-            model._delayedChange(attrStr, val[attr]);
+            delayedTriggers.delayedChange(model, attrStr, val[attr]);
           }
 
           if (_.isArray(val[attr])){
-            model._delayedTrigger('add:' + attrStr, model, val[attr]);
+            delayedTriggers.delayedTrigger('add:' + attrStr, model, val[attr]);
           }
         }
       });
