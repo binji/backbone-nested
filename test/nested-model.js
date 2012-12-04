@@ -641,6 +641,27 @@ $(document).ready(function() {
     sinon.assert.calledOnce(removeNameMiddleFullAlternates);
   });
 
+  test("no add when changing existing value in array", function () {
+    var change = sinon.spy();
+    var changeAddresses = sinon.spy();
+    var addAddresses = sinon.spy();
+
+    doc.bind('change', change);
+    doc.bind('change:addresses', changeAddresses);
+    doc.bind('add:addresses', addAddresses);
+
+    doc.set({
+      'addresses[1]': {
+        city: 'Seattle',
+        state: 'WA'
+      }
+    });
+
+    sinon.assert.calledOnce(change);
+    sinon.assert.calledOnce(changeAddresses);
+    sinon.assert.notCalled(addAddresses);
+  });
+
 
   // ----- CHANGED_ATTRIBUTES --------
 

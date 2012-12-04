@@ -205,6 +205,7 @@
 
       var fullPathLength = attrPath.length;
       var model = this;
+      var arrayAddTrigger;
 
       Backbone.NestedModel.walkPath(newAttrs, attrPath, function(val, path){
         var attr = _.last(path);
@@ -212,6 +213,20 @@
 
         // See if this is a new value being set
         var isNewValue = !_.isEqual(val[attr], newValue);
+
+        if (!val[attr]){
+          if (_.isNumber(attr)){
+            val[attr] = [];
+
+            // arrayAddTrigger is a function to send a delayed "add" event. We
+            // only send it if we are trying to set an index that doesn't
+            // exist.
+            if (arrayAddTrigger)
+              arrayAddTrigger();
+          } else {
+            val[attr] = {};
+          }
+        }
 
         if (path.length === fullPathLength){
           // reached the attribute to be set
@@ -252,12 +267,6 @@
             delayedTriggers.delayedTrigger('remove:' + parentPath, model, val[attr]);
           }
 
-        } else if (!val[attr]){
-          if (_.isNumber(attr)){
-            val[attr] = [];
-          } else {
-            val[attr] = {};
-          }
         }
 
         if (!opts.silent){
@@ -267,7 +276,11 @@
           }
 
           if (_.isArray(val[attr])){
-            delayedTriggers.delayedTrigger('add:' + attrStr, model, val[attr]);
+            arrayAddTrigger = function () {
+              delayedTriggers.delayedTrigger('add:' + attrStr, model, val[attr]);
+            };
+          } else {
+            arrayAddTrigger = null;
           }
         }
       });
